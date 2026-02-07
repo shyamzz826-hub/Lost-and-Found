@@ -62,8 +62,6 @@ class LoginScreen extends StatelessWidget {
               SizedBox(height: 12),
               Divider(),
               Text('Version: 1.0.0'),
-              SizedBox(height: 6),
-              Text('Developer: Shyam Das'),
               SizedBox(height: 14),
               Text('Features', style: TextStyle(fontWeight: FontWeight.bold)),
               SizedBox(height: 6),

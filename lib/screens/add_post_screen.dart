@@ -20,7 +20,11 @@ class _AddPostScreenState extends State<AddPostScreen> {
   bool _loading = false;
 
   Future<void> _pickImage(ImageSource source) async {
-    final picked = await ImagePicker().pickImage(source: source);
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 60, // ⭐ CRITICAL
+      maxWidth: 1280,
+    );
     if (picked != null) {
       setState(() => _image = File(picked.path));
     }
@@ -51,98 +55,103 @@ class _AddPostScreenState extends State<AddPostScreen> {
 
     setState(() => _loading = true);
 
-    final user = FirebaseAuth.instance.currentUser!;
-    final postRef = FirebaseDatabase.instance.ref('posts');
-    final postId = postRef.push().key!;
+    try {
+      final user = FirebaseAuth.instance.currentUser!;
+      final postRef = FirebaseDatabase.instance.ref('posts');
+      final postId = postRef.push().key!;
+      String? imageUrl;
 
-    String? imageUrl;
+      if (_image != null) {
+        final storageRef = FirebaseStorage.instance.ref('posts/$postId.jpg');
 
-    if (_image != null) {
-      final storageRef = FirebaseStorage.instance.ref('posts/$postId.jpg');
-      await storageRef.putFile(_image!);
-      imageUrl = await storageRef.getDownloadURL();
+        final uploadTask = storageRef.putFile(_image!);
+        final snapshot = await uploadTask.timeout(const Duration(seconds: 30));
+
+        imageUrl = await snapshot.ref.getDownloadURL();
+      }
+
+      await postRef.child(postId).set({
+        'ownerId': user.uid,
+        'userName': user.displayName ?? 'User',
+        'type': _type,
+        'title': _titleCtrl.text.trim(),
+        'description': _descCtrl.text.trim(),
+        'imageUrl': imageUrl,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      });
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to post: $e')));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-
-    await postRef.child(postId).set({
-      'ownerId': user.uid,
-      'userName': user.displayName ?? 'User',
-      'type': _type,
-      'title': _titleCtrl.text.trim(),
-      'description': _descCtrl.text.trim(),
-      'imageUrl': imageUrl,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    });
-
-    if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: true,
       appBar: AppBar(title: const Text('Add Post')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  16,
-                  16,
-                  MediaQuery.of(context).viewInsets.bottom + 16,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      value: _type,
-                      decoration: const InputDecoration(labelText: 'Type'),
-                      items: const [
-                        DropdownMenuItem(value: 'Lost', child: Text('Lost')),
-                        DropdownMenuItem(value: 'Found', child: Text('Found')),
-                      ],
-                      onChanged: (v) => setState(() => _type = v!),
+          : SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: _type,
+                    decoration: const InputDecoration(labelText: 'Type'),
+                    items: const [
+                      DropdownMenuItem(value: 'Lost', child: Text('Lost')),
+                      DropdownMenuItem(value: 'Found', child: Text('Found')),
+                    ],
+                    onChanged: (v) => setState(() => _type = v!),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _titleCtrl,
+                    decoration: const InputDecoration(labelText: 'Title'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _descCtrl,
+                    maxLines: 3,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_image != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.file(_image!, height: 160),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _titleCtrl,
-                      decoration: const InputDecoration(labelText: 'Title'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _descCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Description',
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.camera_alt),
+                        onPressed: () => _pickImage(ImageSource.camera),
                       ),
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 16),
-                    if (_image != null)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.file(_image!, height: 160),
+                      IconButton(
+                        icon: const Icon(Icons.photo),
+                        onPressed: () => _pickImage(ImageSource.gallery),
                       ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.camera_alt),
-                          onPressed: () => _pickImage(ImageSource.camera),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.photo),
-                          onPressed: () => _pickImage(ImageSource.gallery),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: _submitPost,
-                      child: const Text('Post'),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _submitPost,
+                    child: const Text('Post'),
+                  ),
+                ],
               ),
             ),
     );

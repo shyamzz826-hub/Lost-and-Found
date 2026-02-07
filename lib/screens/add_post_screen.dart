@@ -15,14 +15,17 @@ class AddPostScreen extends StatefulWidget {
 class _AddPostScreenState extends State<AddPostScreen> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+
+  // 🔹 Default type
   String _type = 'Lost';
+
   File? _image;
   bool _loading = false;
 
   Future<void> _pickImage(ImageSource source) async {
     final picked = await ImagePicker().pickImage(
       source: source,
-      imageQuality: 60, // ⭐ CRITICAL
+      imageQuality: 60,
       maxWidth: 1280,
     );
     if (picked != null) {
@@ -73,7 +76,7 @@ class _AddPostScreenState extends State<AddPostScreen> {
       await postRef.child(postId).set({
         'ownerId': user.uid,
         'userName': user.displayName ?? 'User',
-        'type': _type,
+        'type': _type, // 🔹 Lost / Found / Available / Request
         'title': _titleCtrl.text.trim(),
         'description': _descCtrl.text.trim(),
         'imageUrl': imageUrl,
@@ -106,33 +109,50 @@ class _AddPostScreenState extends State<AddPostScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // 🔹 POST TYPE SELECTOR
                   DropdownButtonFormField<String>(
                     value: _type,
                     decoration: const InputDecoration(labelText: 'Type'),
                     items: const [
                       DropdownMenuItem(value: 'Lost', child: Text('Lost')),
                       DropdownMenuItem(value: 'Found', child: Text('Found')),
+                      DropdownMenuItem(
+                        value: 'Available',
+                        child: Text('Available'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Request',
+                        child: Text('Request'),
+                      ),
                     ],
                     onChanged: (v) => setState(() => _type = v!),
                   ),
+
                   const SizedBox(height: 12),
+
                   TextField(
                     controller: _titleCtrl,
                     decoration: const InputDecoration(labelText: 'Title'),
                   ),
+
                   const SizedBox(height: 12),
+
                   TextField(
                     controller: _descCtrl,
                     maxLines: 3,
                     decoration: const InputDecoration(labelText: 'Description'),
                   ),
+
                   const SizedBox(height: 16),
+
                   if (_image != null)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: Image.file(_image!, height: 160),
                     ),
+
                   const SizedBox(height: 10),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -146,7 +166,9 @@ class _AddPostScreenState extends State<AddPostScreen> {
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 24),
+
                   ElevatedButton(
                     onPressed: _submitPost,
                     child: const Text('Post'),

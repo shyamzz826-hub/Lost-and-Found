@@ -19,6 +19,15 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _search = '';
+  String _filterType = 'All';
+
+  final List<String> _types = const [
+    'All',
+    'Lost',
+    'Found',
+    'Available',
+    'Request',
+  ];
 
   Future<void> _logout(BuildContext context) async {
     final ok = await showDialog<bool>(
@@ -43,6 +52,33 @@ class _HomeScreenState extends State<HomeScreen> {
       await GoogleSignIn().signOut();
       await FirebaseAuth.instance.signOut();
     }
+  }
+
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: _types.map((t) {
+              return ListTile(
+                title: Text(t),
+                trailing: _filterType == t ? const Icon(Icons.check) : null,
+                onTap: () {
+                  setState(() => _filterType = t);
+                  Navigator.pop(context);
+                },
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
   }
 
   String _dateLabel(DateTime d) {
@@ -93,21 +129,23 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundImage: user.photoURL != null
                 ? NetworkImage(user.photoURL!)
                 : null,
-            child: user.photoURL == null
-                ? const Icon(Icons.person, size: 18)
-                : null,
+            child: user.photoURL == null ? const Icon(Icons.person) : null,
           ),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () async {
-              final r = await showSearch(
+              final q = await showSearch(
                 context: context,
                 delegate: _PostSearchDelegate(),
               );
-              if (r != null) setState(() => _search = r.toLowerCase());
+              if (q != null) setState(() => _search = q.toLowerCase());
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: _showFilterSheet,
           ),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -124,16 +162,13 @@ class _HomeScreenState extends State<HomeScreen> {
           }
 
           final raw = snap.data!.snapshot.value as Map;
-          List<PostModel> posts =
-              raw.entries
-                  .map(
-                    (e) => PostModel.fromMap(
-                      e.key,
-                      Map<String, dynamic>.from(e.value),
-                    ),
-                  )
-                  .toList()
-                ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          List<PostModel> posts = raw.entries.map((e) {
+            return PostModel.fromMap(e.key, Map<String, dynamic>.from(e.value));
+          }).toList()..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+          if (_filterType != 'All') {
+            posts = posts.where((p) => p.type == _filterType).toList();
+          }
 
           if (_search.isNotEmpty) {
             posts = posts
@@ -242,7 +277,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                         onPressed: () async {
                                           final myUid = user.uid;
                                           final otherUid = post.ownerId;
-
                                           final ids = [myUid, otherUid]..sort();
                                           final chatId =
                                               'chat_${post.id}_${ids[0]}_${ids[1]}';
@@ -254,7 +288,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 'users/$otherUid': true,
                                                 'unread/$myUid': 0,
                                                 'unread/$otherUid': 0,
-
                                                 'userInfo/$myUid/name':
                                                     user.displayName ?? 'User',
                                                 'userInfo/$otherUid/name':
@@ -390,6 +423,8 @@ class _PostSearchDelegate extends SearchDelegate<String> {
   }
 
   @override
-  Widget buildSuggestions(BuildContext context) =>
-      const Padding(padding: EdgeInsets.all(16), child: Text('Search posts'));
+  Widget buildSuggestions(BuildContext context) => const Padding(
+    padding: EdgeInsets.all(16),
+    child: Text('Search posts by title or description'),
+  );
 }

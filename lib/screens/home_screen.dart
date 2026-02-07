@@ -122,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Lost & Found'),
+        title: const Text('Campus Connect'),
         leading: Padding(
           padding: const EdgeInsets.all(8),
           child: CircleAvatar(

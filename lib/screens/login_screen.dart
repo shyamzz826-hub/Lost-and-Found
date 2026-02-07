@@ -97,7 +97,7 @@ class LoginScreen extends StatelessWidget {
             children: const [
               Center(
                 child: Text(
-                  'Lost & Found',
+                  'Campus Connect',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -154,7 +154,7 @@ class LoginScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 26),
                     const Text(
-                      'Lost & Found',
+                      'Campus Connect',
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -162,7 +162,7 @@ class LoginScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Help items find their way back home',
+                      'A space for us to Connect',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 14, color: Colors.grey),
                     ),

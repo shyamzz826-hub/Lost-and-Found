@@ -116,19 +116,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() => _replyTo = null);
 
-    await _chatRef.update({
-      'lastMessage': text,
-      'lastTimestamp': ts,
-      'lastSenderId': myUid,
-      'lastSenderName': myName,
-    });
+    await _chatRef.update({'lastMessage': text, 'lastTimestamp': ts});
 
     await _increaseUnreadForOthers();
     _scrollBottom();
   }
 
+  // ================= IMAGE SEND (FIXED) =================
   Future<void> _sendImage(ImageSource src) async {
-    final picked = await ImagePicker().pickImage(source: src, imageQuality: 75);
+    final picked = await ImagePicker().pickImage(
+      source: src,
+      imageQuality: 75,
+      maxWidth: 1280,
+    );
     if (picked == null) return;
 
     final file = File(picked.path);
@@ -148,22 +148,33 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _replyTo = null);
     _scrollBottom();
 
-    final ref = FirebaseStorage.instance.ref(
-      'chat_images/${widget.chatId}/${msgRef.key}.jpg',
-    );
+    try {
+      final storageRef = FirebaseStorage.instance.ref(
+        'chat_images/${widget.chatId}/${msgRef.key}.jpg',
+      );
 
-    await ref.putFile(file);
-    final url = await ref.getDownloadURL();
+      final snap = await storageRef
+          .putFile(file)
+          .timeout(const Duration(seconds: 30));
 
-    await msgRef.update({
-      'imageUrl': url,
-      'uploading': false,
-      'localPath': null,
-    });
+      final url = await snap.ref.getDownloadURL();
 
-    await _chatRef.update({'lastMessage': '📷 Photo', 'lastTimestamp': ts});
-    await _increaseUnreadForOthers();
-    _scrollBottom();
+      await msgRef.update({
+        'imageUrl': url,
+        'uploading': false,
+        'localPath': null,
+      });
+
+      await _chatRef.update({'lastMessage': '📷 Photo', 'lastTimestamp': ts});
+
+      await _increaseUnreadForOthers();
+      _scrollBottom();
+    } catch (e) {
+      await msgRef.remove();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Image upload failed')));
+    }
   }
 
   Widget _imageBubble(Map msg) {
@@ -216,6 +227,40 @@ class _ChatScreenState extends State<ChatScreen> {
       await Future.wait(_selected.map((id) => _msgRef.child(id).remove()));
       setState(() => _selected.clear());
     }
+  }
+
+  // ================= BOTTOM SHEET (FIXED) =================
+  void _showImagePickerSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Camera'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _sendImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.image),
+                title: const Text('Gallery'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _sendImage(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -299,97 +344,69 @@ class _ChatScreenState extends State<ChatScreen> {
                               });
                             }
                           },
-                          child: Dismissible(
-                            key: ValueKey(id),
-                            direction: _selected.isEmpty
-                                ? DismissDirection.startToEnd
-                                : DismissDirection.none,
-                            movementDuration: const Duration(milliseconds: 120),
-                            confirmDismiss: (_) async {
-                              setState(() {
-                                _replyTo = {
-                                  'text': msg['type'] == 'image'
-                                      ? '📷 Photo'
-                                      : msg['text'],
-                                };
-                              });
-                              return false;
-                            },
-                            background: const Padding(
-                              padding: EdgeInsets.only(left: 16),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Icon(Icons.reply),
+                          child: Align(
+                            alignment: isMe
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? Colors.blue.shade100
+                                    : isMe
+                                    ? Colors.black
+                                    : Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(18),
                               ),
-                            ),
-                            child: Align(
-                              alignment: isMe
-                                  ? Alignment.centerRight
-                                  : Alignment.centerLeft,
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: selected
-                                      ? Colors.blue.shade100
-                                      : isMe
-                                      ? Colors.black
-                                      : Colors.grey.shade300,
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    if (msg['replyTo'] != null)
-                                      Container(
-                                        margin: const EdgeInsets.only(
-                                          bottom: 6,
-                                        ),
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          border: const Border(
-                                            left: BorderSide(
-                                              color: Colors.blue,
-                                              width: 3,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          msg['replyTo']['text'],
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.black87,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  if (msg['replyTo'] != null)
+                                    Container(
+                                      margin: const EdgeInsets.only(bottom: 6),
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: const Border(
+                                          left: BorderSide(
+                                            color: Colors.blue,
+                                            width: 3,
                                           ),
                                         ),
                                       ),
-                                    msg['type'] == 'image'
-                                        ? _imageBubble(msg)
-                                        : Text(
-                                            msg['text'],
-                                            style: TextStyle(
-                                              color: isMe
-                                                  ? Colors.white
-                                                  : Colors.black,
-                                            ),
-                                          ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      _timeLabel(msg['timestamp']),
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: isMe
-                                            ? Colors.white70
-                                            : Colors.black54,
+                                      child: Text(
+                                        msg['replyTo']['text'],
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.black87,
+                                        ),
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  msg['type'] == 'image'
+                                      ? _imageBubble(msg)
+                                      : Text(
+                                          msg['text'],
+                                          style: TextStyle(
+                                            color: isMe
+                                                ? Colors.white
+                                                : Colors.black,
+                                          ),
+                                        ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _timeLabel(msg['timestamp']),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: isMe
+                                          ? Colors.white70
+                                          : Colors.black54,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -401,28 +418,6 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-
-          if (_replyTo != null)
-            Container(
-              color: Colors.grey.shade200,
-              padding: const EdgeInsets.all(8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _replyTo!['text'],
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => setState(() => _replyTo = null),
-                  ),
-                ],
-              ),
-            ),
-
           SafeArea(
             child: SizedBox(
               height: _inputBarHeight,
@@ -430,32 +425,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.attach_file),
-                    onPressed: () {
-                      showModalBottomSheet(
-                        context: context,
-                        builder: (_) => Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ListTile(
-                              leading: const Icon(Icons.camera_alt),
-                              title: const Text('Camera'),
-                              onTap: () {
-                                Navigator.pop(context);
-                                _sendImage(ImageSource.camera);
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.image),
-                              title: const Text('Gallery'),
-                              onTap: () {
-                                Navigator.pop(context);
-                                _sendImage(ImageSource.gallery);
-                              },
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                    onPressed: _showImagePickerSheet,
                   ),
                   Expanded(
                     child: TextField(

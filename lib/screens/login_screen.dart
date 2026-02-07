@@ -6,15 +6,22 @@ import 'package:google_sign_in/google_sign_in.dart';
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 
-  // ✅ NITC EMAIL VALIDATION
+  // 🔒 NITC EMAIL VALIDATION
   bool _isValidNitcEmail(String email) {
-    final emailRegex = RegExp(r'^[a-zA-Z]+_b\d{6}[a-z]{2,3}@nitc\.ac\.in$');
-    return emailRegex.hasMatch(email);
+    final regex = RegExp(r'^[a-zA-Z]+_b\d{6}[a-z]{2,3}@nitc\.ac\.in$');
+    return regex.hasMatch(email);
   }
 
   Future<void> _signInWithGoogle(BuildContext context) async {
     try {
-      final googleUser = await GoogleSignIn().signIn();
+      // 🔹 Force account picker every time (fixes dropdown issue)
+      final googleSignIn = GoogleSignIn(
+        hostedDomain: 'nitc.ac.in', // ⭐ IMPORTANT
+      );
+
+      await googleSignIn.signOut(); // clear old session
+
+      final googleUser = await googleSignIn.signIn();
       if (googleUser == null) return;
 
       final googleAuth = await googleUser.authentication;
@@ -33,10 +40,10 @@ class LoginScreen extends StatelessWidget {
 
       final email = user.email ?? '';
 
-      // ❌ BLOCK NON-NITC EMAILS
+      // ❌ Final safety check
       if (!_isValidNitcEmail(email)) {
         await FirebaseAuth.instance.signOut();
-        await GoogleSignIn().signOut();
+        await googleSignIn.signOut();
 
         if (context.mounted) {
           showDialog(
@@ -44,7 +51,9 @@ class LoginScreen extends StatelessWidget {
             builder: (_) => AlertDialog(
               title: const Text('Oops 😕'),
               content: const Text(
-                'Not an NITC email ID.\n\nPlease login using your NITC mail ID.',
+                'This is not a valid NITC student email.\n\n'
+                'Please login using your NITC mail ID '
+                '(name_bXXXXXXxx@nitc.ac.in).',
               ),
               actions: [
                 TextButton(
@@ -58,7 +67,7 @@ class LoginScreen extends StatelessWidget {
         return;
       }
 
-      // ✅ SAVE USER PROFILE TO REALTIME DB
+      // ✅ SAVE USER PROFILE
       await FirebaseDatabase.instance.ref('users/${user.uid}').update({
         'uid': user.uid,
         'name': user.displayName ?? '',
@@ -67,9 +76,9 @@ class LoginScreen extends StatelessWidget {
         'lastLogin': ServerValue.timestamp,
       });
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Login failed. Try again.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Login failed. Please try again.')),
+      );
     }
   }
 
@@ -100,9 +109,9 @@ class LoginScreen extends StatelessWidget {
               SizedBox(height: 6),
               Text('• Google Authentication'),
               Text('• NITC Email Restricted Login'),
-              Text('• Lost & Found Posts'),
+              Text('• Lost / Found / Available / Request'),
               Text('• Image & Text Posts'),
-              Text('• Search Posts'),
+              Text('• Search & Filter'),
               Text('• Real-time Chat'),
               SizedBox(height: 14),
               Text('Built With', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -171,7 +180,7 @@ class LoginScreen extends StatelessWidget {
                         ),
                         icon: const Icon(Icons.login, color: Colors.white),
                         label: const Text(
-                          'Continue with Google',
+                          'Continue with NITC Google',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 15,
@@ -183,7 +192,7 @@ class LoginScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 22),
                     const Text(
-                      'Only NITC email IDs are allowed',
+                      'Only NITC student email IDs are allowed',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),

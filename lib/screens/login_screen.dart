@@ -6,6 +6,12 @@ import 'package:google_sign_in/google_sign_in.dart';
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 
+  // ✅ NITC EMAIL VALIDATION
+  bool _isValidNitcEmail(String email) {
+    final emailRegex = RegExp(r'^[a-zA-Z]+_b\d{6}[a-z]{2,3}@nitc\.ac\.in$');
+    return emailRegex.hasMatch(email);
+  }
+
   Future<void> _signInWithGoogle(BuildContext context) async {
     try {
       final googleUser = await GoogleSignIn().signIn();
@@ -25,7 +31,34 @@ class LoginScreen extends StatelessWidget {
       final user = userCredential.user;
       if (user == null) return;
 
-      // ✅ SAVE USER PROFILE (NAME + PHOTO) TO REALTIME DB
+      final email = user.email ?? '';
+
+      // ❌ BLOCK NON-NITC EMAILS
+      if (!_isValidNitcEmail(email)) {
+        await FirebaseAuth.instance.signOut();
+        await GoogleSignIn().signOut();
+
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('Oops 😕'),
+              content: const Text(
+                'Not an NITC email ID.\n\nPlease login using your NITC mail ID.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      // ✅ SAVE USER PROFILE TO REALTIME DB
       await FirebaseDatabase.instance.ref('users/${user.uid}').update({
         'uid': user.uid,
         'name': user.displayName ?? '',
@@ -66,13 +99,11 @@ class LoginScreen extends StatelessWidget {
               Text('Features', style: TextStyle(fontWeight: FontWeight.bold)),
               SizedBox(height: 6),
               Text('• Google Authentication'),
+              Text('• NITC Email Restricted Login'),
               Text('• Lost & Found Posts'),
               Text('• Image & Text Posts'),
               Text('• Search Posts'),
-              Text('• My Posts (Edit/Delete)'),
               Text('• Real-time Chat'),
-              Text('• Chat Inbox'),
-              Text('• Firebase Realtime Sync'),
               SizedBox(height: 14),
               Text('Built With', style: TextStyle(fontWeight: FontWeight.bold)),
               SizedBox(height: 6),
@@ -152,7 +183,7 @@ class LoginScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 22),
                     const Text(
-                      'By continuing, you agree to our terms & privacy policy',
+                      'Only NITC email IDs are allowed',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
